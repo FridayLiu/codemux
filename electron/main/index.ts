@@ -184,21 +184,6 @@ if (!gotTheLock) {
 
     // Mark startup as ready once all engines have settled (success or failure)
     Promise.allSettled(enginePromises).then(async () => {
-      const gatewayUrl = app.isPackaged && productionServer.isRunning()
-        ? `ws://127.0.0.1:${WEB_PORT}/ws`
-        : `ws://127.0.0.1:${GATEWAY_PORT}`;
-
-      try {
-        // Start the shared webhook HTTP server for channels that need it
-        // (Telegram, WeCom, Teams). Feishu and DingTalk use platform WSClient.
-        await webhookServer.start();
-        mainLog.info(`Webhook server started on port ${webhookServer.serverPort}`);
-      } catch (err) {
-        mainLog.error("Failed to start channel webhook server:", err);
-      }
-
-      channelManager.setRuntimeOptions({ gatewayUrl });
-
       startupReady = true;
       mainLog.info("All engines settled, startup ready");
       const win = getMainWindow();
@@ -208,6 +193,17 @@ if (!gotTheLock) {
 
       // Initialize channels (after engines are ready and gateway is running)
       try {
+        // Start the shared webhook HTTP server for channels that need it
+        // (Telegram, WeCom, Teams). Feishu and DingTalk use platform WSClient.
+        await webhookServer.start();
+        mainLog.info(`Webhook server started on port ${webhookServer.serverPort}`);
+
+        // Determine the actual Gateway WS URL for channel adapters.
+        // In production, gateway is attached to the production HTTP server on /ws path.
+        // In dev, gateway runs on a standalone port.
+        const gatewayUrl = app.isPackaged && productionServer.isRunning()
+          ? `ws://127.0.0.1:${WEB_PORT}/ws`
+          : `ws://127.0.0.1:${GATEWAY_PORT}`;
         await channelManager.initFromConfig({ gatewayUrl });
       } catch (err) {
         mainLog.error("Failed to initialize channels:", err);
